@@ -2,6 +2,8 @@ import { exchangeCodeForAccessToken, getAccountDetails } from "@/lib/aurinko";
 import { db } from "@/server/db";
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
+import axios from "axios";
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -31,7 +33,7 @@ export async function GET(req: NextRequest) {
       { status: 400 },
     );
   const accountDetails = await getAccountDetails(token.accessToken);
-  if (accountDetails)
+  if (accountDetails) {
     await db.account.upsert({
       where: {
         id: token.accountId.toString(),
@@ -47,5 +49,25 @@ export async function GET(req: NextRequest) {
         accessToken: token.accessToken,
       },
     });
-  return NextResponse.json({ message: "done" }, { status: 200 });
+  }
+
+  //trigger initial sync
+  if (token && token.accountId) {
+    // Check if token and accountId are defined
+    waitUntil(
+      axios.post(`${process.env.NEXT_PUBLIC_APP_URL}/api/initial-sync`, {
+        accountId: token.accountId.toString(),
+        userId,
+      }),
+    )
+      .then((response) => {
+        console.log(" initial sync triggered", response.data);
+      })
+      .catch((error) => {
+        console.error("Failed to trigger initial sync", error);
+      });
+  } else {
+    console.error("Token or accountId is undefined");
+  }
+  return NextResponse.redirect(new URL("/mail", req.url));
 }
