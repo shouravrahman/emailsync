@@ -1,25 +1,94 @@
+import type {
+  EmailHeader,
+  EmailMessage,
+  SyncResponse,
+  SyncUpdatedResponse,
+} from "@/lib/types";
+import { db } from "@/server/db";
 import axios from "axios";
-import { EmailMessage, SyncResponse, SyncUpdatedResponse } from "./types";
+// import { syncEmailsToDatabase } from './sync-to-db';
+
+const API_BASE_URL = "https://api.aurinko.io/v1";
 
 export class Account {
   private token: string;
+
   constructor(token: string) {
     this.token = token;
   }
 
-  private async startSync() {
-    const response = await axios.post("https://api.aurinko.io/v1/email/sync", {
-      headers: {
-        Authorization: `Bearer ${this.token}`,
+  private async startSync(daysWithin: number): Promise<SyncResponse> {
+    const response = await axios.post<SyncResponse>(
+      `${API_BASE_URL}/email/sync`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${this.token}` },
+        params: {
+          daysWithin,
+          bodyType: "html",
+        },
       },
-      params: {
-        daysWithin: 5,
-        bodyType: "html",
-      },
-    });
-    console.log("startsync", response.data);
+    );
     return response.data;
   }
+
+  //  async createSubscription() {
+  //      const webhookUrl = process.env.NODE_ENV === 'development' ? 'https://potatoes-calculator-reports-crisis.trycloudflare.com' : process.env.NEXT_PUBLIC_URL
+  //      const res = await axios.post('https://api.aurinko.io/v1/subscriptions',
+  //          {
+  //              resource: '/email/messages',
+  //              notificationUrl: webhookUrl + '/api/aurinko/webhook'
+  //          },
+  //          {
+  //              headers: {
+  //                  'Authorization': `Bearer ${this.token}`,
+  //                  'Content-Type': 'application/json'
+  //              }
+  //          }
+  //      )
+  //      return res.data
+  //  }
+
+  //  async syncEmails() {
+  //      const account = await db.account.findUnique({
+  //          where: {
+  //              token: this.token
+  //          },
+  //      })
+  //      if (!account) throw new Error("Invalid token")
+  //      if (!account.nextDeltaToken) throw new Error("No delta token")
+  //      let response = await this.getUpdatedEmails({ deltaToken: account.nextDeltaToken })
+  //      let allEmails: EmailMessage[] = response.records
+  //      let storedDeltaToken = account.nextDeltaToken
+  //      if (response.nextDeltaToken) {
+  //          storedDeltaToken = response.nextDeltaToken
+  //      }
+  //      while (response.nextPageToken) {
+  //          response = await this.getUpdatedEmails({ pageToken: response.nextPageToken });
+  //          allEmails = allEmails.concat(response.records);
+  //          if (response.nextDeltaToken) {
+  //              storedDeltaToken = response.nextDeltaToken
+  //          }
+  //      }
+
+  //      if (!response) throw new Error("Failed to sync emails")
+
+  //      try {
+  //          await syncEmailsToDatabase(allEmails, account.id)
+  //      } catch (error) {
+  //          console.log('error', error)
+  //      }
+
+  //      // console.log('syncEmails', response)
+  //      await db.account.update({
+  //          where: {
+  //              id: account.id,
+  //          },
+  //          data: {
+  //              nextDeltaToken: storedDeltaToken,
+  //          }
+  //      })
+  //  }
 
   async getUpdatedEmails({
     deltaToken,
@@ -27,68 +96,80 @@ export class Account {
   }: {
     deltaToken?: string;
     pageToken?: string;
-  }) {
+  }): Promise<SyncUpdatedResponse> {
+    // console.log('getUpdatedEmails', { deltaToken, pageToken });
     let params: Record<string, string> = {};
-    if (deltaToken) params.deltaToken = deltaToken;
-    if (pageToken) params.pageToken = pageToken;
-
+    if (deltaToken) {
+      params.deltaToken = deltaToken;
+    }
+    if (pageToken) {
+      params.pageToken = pageToken;
+    }
     const response = await axios.get<SyncUpdatedResponse>(
-      "https://api.aurinko.io/v1/email/sync/updated",
+      `${API_BASE_URL}/email/sync/updated`,
       {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
         params,
+        headers: { Authorization: `Bearer ${this.token}` },
       },
     );
-    console.log("getUpdatedEmails", response.data);
     return response.data;
   }
 
-  async performInitalSync() {
+  async performInitialSync() {
     try {
-      let syncResponse: SyncResponse = await this.startSync();
-      console.log("syncResponse", syncResponse);
-      while (!syncResponse.ready) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        syncResponse = await this.startSync();
-      }
-      //delta token
-      let deltaToken: string = await syncResponse.syncUpdatedToken;
-      console.log("deltaToken", deltaToken);
-      let upadatedResponse = await this.getUpdatedEmails({
-        deltaToken: deltaToken,
-      });
-      console.log("upadatedResponse", upadatedResponse);
-      if (upadatedResponse.nextDeltaToken) {
-        //sync complete
-        deltaToken = upadatedResponse.nextDeltaToken;
-      }
-      let allEmails: EmailMessage[] = upadatedResponse.records;
+      // Start the sync process
+      const daysWithin = 3;
+      let syncResponse = await this.startSync(daysWithin); // Sync emails from the last 7 days
 
-      //fetch all
-      while (upadatedResponse.nextPageToken) {
-        upadatedResponse = await this.getUpdatedEmails({
-          pageToken: upadatedResponse.nextPageToken,
+      // Wait until the sync is ready
+      while (!syncResponse.ready) {
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second
+        syncResponse = await this.startSync(daysWithin);
+      }
+
+      console.log('Sync is ready. Tokens:', syncResponse);
+
+      // Perform initial sync of updated emails
+      let storedDeltaToken: string = syncResponse.syncUpdatedToken;
+      let updatedResponse = await this.getUpdatedEmails({
+        deltaToken: syncResponse.syncUpdatedToken,
+      });
+      console.log('updatedResponse', updatedResponse)
+      if (updatedResponse.nextDeltaToken) {
+        storedDeltaToken = updatedResponse.nextDeltaToken;
+      }
+      let allEmails: EmailMessage[] = updatedResponse.records;
+
+      // Fetch all pages if there are more
+      while (updatedResponse.nextPageToken) {
+        updatedResponse = await this.getUpdatedEmails({
+          pageToken: updatedResponse.nextPageToken,
         });
-        allEmails = allEmails.concat(upadatedResponse.records);
-        if (upadatedResponse.nextDeltaToken) {
-          //sync ended
-          deltaToken = upadatedResponse.nextDeltaToken;
+        allEmails = allEmails.concat(updatedResponse.records);
+        if (updatedResponse.nextDeltaToken) {
+          storedDeltaToken = updatedResponse.nextDeltaToken;
         }
       }
 
-      console.log(`sync completed, we have synced`, allEmails.length, "emails");
+      // console.log('Initial sync complete. Total emails:', allEmails.length);
 
+      // Store the nextDeltaToken for future incremental syncs
+
+      // Example of using the stored delta token for an incremental sync
+      // await this.performIncrementalSync(storedDeltaToken);
       return {
         emails: allEmails,
-        deltaToken,
+        deltaToken: storedDeltaToken,
       };
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        console.error(error.response?.data.error);
+        console.error(
+          "Error during sync:",
+          JSON.stringify(error.response?.data, null, 2),
+        );
+      } else {
+        console.error("Error during sync:", error);
       }
-      console.error(error);
     }
   }
 }
