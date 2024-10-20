@@ -51,23 +51,18 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  //trigger initial sync
-  if (token && token.accountId) {
-    // Check if token and accountId are defined
-    waitUntil(
-      axios.post(`${process.env.NEXT_PUBLIC_APP_URL}/api/initial-sync`, {
+  waitUntil(
+    axios
+      .post(`${process.env.NEXT_PUBLIC_APP_URL}/api/initial-sync`, {
         accountId: token.accountId.toString(),
         userId,
-      }),
-    )
-      .then((response) => {
-        console.log(" initial sync triggered", response.data);
       })
-      .catch((error) => {
-        console.error("Failed to trigger initial sync", error);
-      });
-  } else {
-    console.error("Token or accountId is undefined");
-  }
+      .then((res) => {
+        console.log(res.data);
+      })
+      .catch((err) => {
+        console.log(err);
+      }),
+  );
   return NextResponse.redirect(new URL("/mail", req.url));
 }
