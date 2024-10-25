@@ -24,7 +24,7 @@ interface NavProps {
 }
 
 export function Nav({ links, isCollapsed }: NavProps) {
-  const [_, setTab] = useLocalStorage("emailsynctab", "inbox");
+  const [_, setTab] = useLocalStorage("emailsync-tab", "inbox");
 
   return (
     <div

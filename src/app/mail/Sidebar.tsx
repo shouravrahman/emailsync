@@ -9,7 +9,7 @@ type Props = {
 };
 const Sidebar = ({ isCollapsed }: Props) => {
   const [tab] = useLocalStorage<"inbox" | "draft" | "sent">(
-    "emailsynctab",
+    "emailsync-tab",
     "inbox",
   );
   const [accountId] = useLocalStorage("accountId", "");

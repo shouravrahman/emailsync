@@ -271,9 +271,8 @@ async function upsertEmailAddress(address: EmailAddress, accountId: string) {
     });
 
     if (existingAddress) {
-      return await db.emailAddress.update({
+      return await db.emailAddress.findUnique({
         where: { id: existingAddress.id },
-        data: { name: address.name, raw: address.raw },
       });
     } else {
       return await db.emailAddress.create({
