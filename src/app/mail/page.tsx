@@ -1,6 +1,8 @@
 import { ThemeToggle } from "@/components/ThemeToggler";
+import { UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 import React from "react";
+import ComposeButton from "./ComposeButton";
 // import Mail from "./mail";
 const Mail = dynamic(
   () => {
@@ -12,7 +14,11 @@ const Dashboard = () => {
   return (
     <>
       <div className="absolute bottom-4 left-0">
-        <ThemeToggle />
+        <div className="flex items-center gap-3">
+          <UserButton />
+          <ThemeToggle />
+          <ComposeButton />
+        </div>
       </div>
       <Mail
         defaultCollapsed={false}

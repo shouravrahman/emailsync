@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { addDays, addHours, format, nextSaturday } from "date-fns"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import EmailDisplay from "./EmailDisplay";
+import ReplyBox from "./ReplyBox";
 const ThreadDisplay = () => {
    const [threadId, setThreadId] = useThread()
    const { threads } = useThreads()
@@ -144,7 +145,7 @@ const ThreadDisplay = () => {
                </div>
                <div className="flex-1"></div>
                <Separator className="mt-auto" />
-               {/* <ReplyBox /> */}
+               <ReplyBox />
             </div>
          ) : (
             <>
